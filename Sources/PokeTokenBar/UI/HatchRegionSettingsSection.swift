@@ -14,7 +14,7 @@ struct HatchRegionDraft: Equatable {
     }
 
     @MainActor mutating func save(to companion: CompanionStore) {
-        companion.setHatchRegions(regions)
+        guard companion.setHatchRegions(regions) else { return }
         self = HatchRegionDraft(companion: companion)
     }
 
@@ -58,8 +58,13 @@ struct HatchRegionSettingsSection: View {
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
+            .disabled(companion.isHatchRegionEditingLocked)
             Text(l.hatchRegionsHint)
                 .font(.caption2).foregroundStyle(.tertiary).padding(.leading, 4)
+            if companion.isHatchRegionEditingLocked {
+                Text(l.hatchRegionsLoadingHint)
+                    .font(.caption2).foregroundStyle(.secondary).padding(.leading, 4)
+            }
             if isPartial {
                 Text(l.hatchRegionsBadgeWarning)
                     .font(.caption2).foregroundStyle(.tertiary).padding(.leading, 4)
@@ -70,6 +75,7 @@ struct HatchRegionSettingsSection: View {
                     Button(l.save) { draft.save(to: companion) }
                         .buttonStyle(.borderedProminent)
                         .accessibilityIdentifier("saveHatchRegions")
+                        .disabled(companion.isHatchRegionEditingLocked)
                 }
             }
         }

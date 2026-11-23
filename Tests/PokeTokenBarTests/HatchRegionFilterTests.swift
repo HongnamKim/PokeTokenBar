@@ -9,8 +9,11 @@ final class HatchRegionFilterTests: XCTestCase {
         var state = CompanionState()
         state.installBaselineSet = true
         state.pendingHatchID = pendingHatchID
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("hatch-regions-\(UUID()).json")
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hatch-regions-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("companion-state.json")
         try JSONEncoder().encode(state).write(to: url)
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "hatch-regions-\(UUID())"))
         if let regions { defaults.set(regions, forKey: CompanionStore.hatchRegionsKey) }
@@ -79,6 +82,33 @@ final class HatchRegionFilterTests: XCTestCase {
         let (s, _) = try store(regions: ["kanto"], pendingHatchID: 25)
         s.setHatchRegions([.kanto, .johto])
         XCTAssertEqual(s.state.pendingHatchID, 25, "여전히 유효한 pre-roll 까지 버릴 이유는 없다")
+    }
+
+    func testLaunchDropsAPreRolledSpeciesOutsideTheStoredRegions() throws {
+        let (s, _) = try store(regions: ["kanto"], pendingHatchID: 201)
+        XCTAssertNil(s.state.pendingHatchID)
+    }
+
+    func testImportRevalidatesThePreRolledSpeciesAndFormAgainstLocalRegions() throws {
+        var imported = CompanionState()
+        imported.pendingHatchID = 201 // Unown, Johto
+        imported.pendingForm = .question
+        imported.eggUsage = 1_000
+        imported.eggTier = .rare
+        let data = try SaveTransfer.encode(state: imported, appVersion: "2.5.7", deviceName: "Other Mac", now: Date())
+        let envelope = try SaveTransfer.decode(data)
+        XCTAssertEqual(envelope.state.pendingForm, .question)
+
+        for region in [PokedexRegion.kanto, .johto] {
+            let (s, _) = try store(regions: [region.rawValue])
+            try s.applySave(envelope, todayTokensByProvider: [:], todayDate: "2026-11-10", hasUsageData: false)
+
+            XCTAssertEqual(s.hatchRegions, [region])
+            XCTAssertEqual(s.state.pendingHatchID, region == .johto ? imported.pendingHatchID : nil)
+            XCTAssertEqual(s.state.pendingForm, region == .johto ? imported.pendingForm : nil)
+            XCTAssertEqual(s.state.eggUsage, imported.eggUsage)
+            XCTAssertEqual(s.state.eggTier, imported.eggTier)
+        }
     }
 
     // MARK: 드래프트 (설정 UI)

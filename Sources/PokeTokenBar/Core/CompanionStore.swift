@@ -77,6 +77,9 @@ final class CompanionStore {
     /// **빈 집합은 저장하지 않는다**: 후보 0 은 영원히 안 깨지는 알이다 — 비면 전체로 되돌린다.
     private(set) var hatchRegions: Set<PokedexRegion>
 
+    /// Keep the selection stable while an egg's roll or prefetch is in flight.
+    var isHatchRegionEditingLocked: Bool { isHatching || prefetchInFlight }
+
     static let hatchRegionsKey = "hatchRegions"
 
     /// 저장값 → 지역 집합. 알 수 없는 rawValue 는 버린다(구버전/수기 편집 방어).
@@ -115,8 +118,11 @@ final class CompanionStore {
             defaults.object(forKey: "shopDifficulty") as? Double ?? PokemonBalance.defaultDifficulty)
         hatchRegions = Self.storedHatchRegions(defaults)
         load()
-        if previousGrowth != growthDifficulty {
+        let growthChanged = previousGrowth != growthDifficulty
+        if growthChanged {
             rescaleBankedGrowth(from: previousGrowth, to: growthDifficulty)
+        }
+        if discardDisallowedPendingHatch() || growthChanged {
             save()
         }
         defaults.set(growthDifficulty, forKey: "growthDifficulty")
@@ -160,18 +166,27 @@ final class CompanionStore {
     /// 이미 pre-roll 된 종(`pendingHatchID`)이 새 선택 밖이면 **여기서 버린다**. 안 그러면
     /// 설정을 바꿔도 다음 한 번은 옛 선택대로 부화하고, 사용자는 설정이 안 먹었다고 읽는다.
     /// 예열해 둔 라인 캐시도 같이 비워 다음 프리패치가 새로 뽑게 한다.
-    func setHatchRegions(_ regions: Set<PokedexRegion>) {
+    @discardableResult
+    func setHatchRegions(_ regions: Set<PokedexRegion>) -> Bool {
+        guard !isHatchRegionEditingLocked else { return false }
         let next = regions.isEmpty ? Set(PokedexRegion.allCases) : regions
-        guard next != hatchRegions else { return }
+        guard next != hatchRegions else { return true }
         hatchRegions = next
         defaults.set(next.map(\.rawValue).sorted(), forKey: Self.hatchRegionsKey)
-        if let pending = state.pendingHatchID, !allowsHatching(speciesID: pending) {
-            AppLog.write("hatch regions changed — dropped pre-rolled base \(pending)")
-            state.pendingHatchID = nil
-            state.pendingForm = nil
+        if discardDisallowedPendingHatch() {
             prefetchedLineID = nil
             save()
         }
+        return true
+    }
+
+    @discardableResult
+    private func discardDisallowedPendingHatch() -> Bool {
+        guard let pending = state.pendingHatchID, !allowsHatching(speciesID: pending) else { return false }
+        AppLog.write("hatch region restriction — dropped pre-rolled base \(pending)")
+        state.pendingHatchID = nil
+        state.pendingForm = nil
+        return true
     }
 
     private func rescaleBankedGrowth(from old: Double, to new: Double) {
@@ -2078,6 +2093,7 @@ final class CompanionStore {
                                                   todayTokensByProvider: todayTokensByProvider,
                                                   todayDate: todayDate,
                                                   hasUsageData: hasUsageData)
+        discardDisallowedPendingHatch()
         // 이전 개체 기준으로 진행 중이던 비동기·연출을 전부 무효화한다. activeGeneration 을 올리지
         // 않으면 먼저 떠 있던 라인 로드가 완료되며 새로 불러온 개체를 덮어쓴다.
         activeGeneration += 1

@@ -1818,10 +1818,12 @@ final class CompanionIdentityTests: XCTestCase {
     // MARK: 부화 샘플러 (PokéAPI rejection sampling — 하드코딩 풀 대체)
 
     private func samplerStore(_ provider: any PokeProviding, seed: UInt64,
-                              preloadState: CompanionState? = nil) -> CompanionStore {
+                              preloadState: CompanionState? = nil,
+                              defaults: UserDefaults = .standard) -> CompanionStore {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("poke-\(UUID().uuidString).json")
         if let st = preloadState, let data = try? JSONEncoder().encode(st) { try? data.write(to: url) }
-        return CompanionStore(provider: provider, clock: { fixedNow }, fileURL: url, rng: SeededRNG(seed: seed))
+        return CompanionStore(provider: provider, clock: { fixedNow }, fileURL: url,
+                              rng: SeededRNG(seed: seed), defaults: defaults)
     }
 
     /// 알을 임계 이상으로 채운 상태(installBaseline 포함) — rng 미소비 경로.
@@ -2106,6 +2108,60 @@ final class CompanionIdentityTests: XCTestCase {
         XCTAssertTrue(retryDelayed)
         XCTAssertTrue(store.isEgg)
         XCTAssertEqual(store.eggProgress, 1)
+    }
+
+    func testRegionDraftCannotSaveDuringHatchLineFetch() async throws {
+        let provider = SuspendedFailingLineProvider()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "hatch-lock-\(UUID())"))
+        var state = eggReadyState()
+        state.pendingHatchID = 25
+        let store = samplerStore(provider, seed: 42, preloadState: state, defaults: defaults)
+        XCTAssertTrue(store.setHatchRegions([.kanto]))
+        var draft = HatchRegionDraft(companion: store)
+        draft.regions = [.johto]
+
+        let hatch = Task { await store.hatchIfNeeded() }
+        let lineSuspended = await waitUntilAsync { await provider.isSuspended() }
+        XCTAssertTrue(lineSuspended)
+        XCTAssertTrue(store.isHatchRegionEditingLocked)
+        draft.save(to: store)
+        XCTAssertEqual(store.hatchRegions, [.kanto])
+        XCTAssertEqual(store.state.pendingHatchID, 25)
+        XCTAssertTrue(draft.differs(from: store))
+
+        await provider.resumeFailure()
+        await hatch.value
+
+        XCTAssertFalse(store.isHatchRegionEditingLocked)
+        draft.save(to: store)
+        XCTAssertEqual(store.hatchRegions, [.johto])
+        XCTAssertNil(store.state.pendingHatchID)
+        XCTAssertFalse(draft.differs(from: store))
+    }
+
+    func testHatchRegionsCannotChangeDuringPrefetchSpeciesRoll() async throws {
+        let provider = SuspendedFailingIndexProvider()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "prefetch-lock-\(UUID())"))
+        var state = CompanionState()
+        state.installBaselineSet = true
+        state.lastDate = "d1"
+        let store = samplerStore(provider, seed: 42, preloadState: state, defaults: defaults)
+        XCTAssertTrue(store.setHatchRegions([.kanto]))
+
+        store.update(todayTokensByProvider: ["test": 0], todayDate: "d1", monthTotal: 0,
+                     burnTier: .idle, limitWarning: false, hasUsageData: true)
+        let prefetchSuspended = await waitUntilAsync { await provider.isSuspended() }
+        XCTAssertTrue(prefetchSuspended)
+        XCTAssertFalse(store.isHatching)
+        XCTAssertTrue(store.isHatchRegionEditingLocked)
+        XCTAssertFalse(store.setHatchRegions([.johto]))
+        XCTAssertEqual(store.hatchRegions, [.kanto])
+        XCTAssertEqual(defaults.stringArray(forKey: CompanionStore.hatchRegionsKey), ["kanto"])
+
+        await provider.resumeFailure()
+        let unlocked = await waitUntil { !store.isHatchRegionEditingLocked }
+        XCTAssertTrue(unlocked)
+        XCTAssertTrue(store.setHatchRegions([.johto]))
     }
 
     @MainActor
