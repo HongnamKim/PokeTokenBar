@@ -409,6 +409,23 @@ struct L {
         t("대표로 설정", "Set as representative", "代表ポケモンに設定", "Establecer como representante", "Définir comme représentatif", "Definir como representante", "Als repräsentativ festlegen", "Сделать основным")
     }
     var representativeBadge: String { t("대표", "Representative", "代表", "Representante", "Représentatif", "Representante", "Repräsentativ", "Основной") }
+    // MARK: 부화 지역 제한 (설정)
+    var hatchRegionsSectionTitle: String { t("부화 지역", "Hatch regions", "孵化する地方", "Regiones de incubación", "Régions d'éclosion", "Regiões de chocagem", "Brutregionen", "Регионы вылупления") }
+    var hatchRegionsHint: String { t("선택한 지역의 포켓몬만 알에서 나와요.", "Only Pokémon from the selected regions hatch.", "選んだ地方のポケモンだけがタマゴから生まれます。", "Solo nacen Pokémon de las regiones seleccionadas.", "Seuls les Pokémon des régions sélectionnées éclosent.", "Apenas Pokémon das regiões selecionadas chocam.", "Es schlüpfen nur Pokémon der gewählten Regionen.", "Вылупляются только покемоны из выбранных регионов.") }
+    var hatchRegionsLastOneHint: String { t("최소 한 지역은 켜 두어야 해요.", "At least one region must stay on.", "少なくとも1つの地方はオンのままにしてください。", "Al menos una región debe permanecer activa.", "Au moins une région doit rester activée.", "Pelo menos uma região deve permanecer ativa.", "Mindestens eine Region muss aktiviert bleiben.", "Хотя бы один регион должен остаться включённым.") }
+    var hatchRegionsLoadingHint: String {
+        t("부화 정보를 불러오는 동안에는 지역 설정을 바꿀 수 없어요.",
+          "You can change hatch regions once the egg data loads.",
+          "タマゴの情報を読み込み終わると、地方の設定を変更できます。",
+          "Podrás cambiar las regiones cuando se carguen los datos del huevo.",
+          "Tu peux modifier les régions une fois les données de l’œuf chargées.",
+          "Você pode mudar as regiões assim que os dados do ovo forem carregados.",
+          "Sobald die Daten zum Ei geladen sind, kannst du die Regionen ändern.",
+          "Когда данные яйца загрузятся, вы сможете изменить регионы.")
+    }
+    /// 꺼 둔 지역의 도감 배지는 부화로 달성할 수 없다 — 설정에서 미리 알린다(#442 와의 상호작용).
+    var hatchRegionsBadgeWarning: String { t("꺼 둔 지역과 전국 도감 배지는 달성할 수 없어요.", "Badges for the regions you turn off, and the National Dex badge, become unreachable.", "オフにした地方と全国図鑑のバッジは達成できなくなります。", "Las medallas de las regiones desactivadas y la Pokédex Nacional quedan inalcanzables.", "Les badges des régions désactivées et du Pokédex National deviennent inaccessibles.", "As medalhas das regiões desativadas e da Pokédex Nacional ficam inalcançáveis.", "Abzeichen deaktivierter Regionen und des National-Pokédex sind nicht mehr erreichbar.", "Значки выключенных регионов и Национального Покедекса станут недостижимы.") }
+
     // MARK: 난이도
     var difficultySectionTitle: String { t("난이도", "Difficulty", "難易度", "Dificultad", "Difficulté", "Dificuldade", "Schwierigkeit", "Сложность") }
     var difficultyGrowthLabel: String { t("성장", "Growth", "成長", "Crecimiento", "Croissance", "Crescimento", "Wachstum", "Рост") }
